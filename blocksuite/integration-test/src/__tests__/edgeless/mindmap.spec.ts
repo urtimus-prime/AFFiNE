@@ -405,31 +405,44 @@ describe('mindmap', () => {
     });
     const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
     const mindmapView = () => gfx.view.get(mindmapId) as MindMapView;
+    const getRootButton = () => mindmapView().getCollapseButton(mindmap().tree);
+    const getChildButton = () => {
+      const childNode = mindmap().getNodeByPath([0, 2]);
+      return childNode ? mindmapView().getCollapseButton(childNode) : null;
+    };
     await wait();
 
-    const rootButton = mindmapView().getCollapseButton(mindmap().tree)!;
+    const rootButton = getRootButton();
+    if (!rootButton) {
+      throw new Error('Cannot find root collapse button');
+    }
     move(gfx.viewport.toViewBound(rootButton.elementBound));
-    await waitForCondition(
-      () => !rootButton.hidden && rootButton.opacity > 0.9
-    );
-    expect(rootButton.opacity).toBeCloseTo(1, 2);
+    await waitForCondition(() => {
+      const button = getRootButton();
+      return !!button && !button.hidden && button.opacity > 0.9;
+    });
+    expect(getRootButton()?.opacity).toBeCloseTo(1, 2);
 
-    const childButton = mindmapView().getCollapseButton(
-      mindmap().getNodeByPath([0, 2])!
-    )!;
+    const childButton = getChildButton();
+    if (!childButton) {
+      throw new Error('Cannot find child collapse button');
+    }
     move(gfx.viewport.toViewBound(childButton.elementBound));
-    await waitForCondition(
-      () => !childButton.hidden && childButton.opacity > 0.9
-    );
-    expect(childButton.opacity).toBeCloseTo(1, 2);
+    await waitForCondition(() => {
+      const button = getChildButton();
+      return !!button && !button.hidden && button.opacity > 0.9;
+    });
+    expect(getChildButton()?.opacity).toBeCloseTo(1, 2);
 
     move(new Bound(0, 0, 0, 0));
-    await waitForCondition(
-      () => childButton.opacity < 0.1 && rootButton.opacity < 0.1
-    );
+    await waitForCondition(() => {
+      const root = getRootButton();
+      const child = getChildButton();
+      return !!root && !!child && child.opacity < 0.1 && root.opacity < 0.1;
+    });
 
-    expect(childButton.opacity).toBeCloseTo(0, 2);
-    expect(rootButton.opacity).toBeCloseTo(0, 2);
+    expect(getChildButton()?.opacity).toBeCloseTo(0, 2);
+    expect(getRootButton()?.opacity).toBeCloseTo(0, 2);
   });
 
   test("collapsed node's button should be always visible except its ancestor is collapsed", async () => {
