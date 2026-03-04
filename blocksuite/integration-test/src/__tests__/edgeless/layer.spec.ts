@@ -15,7 +15,7 @@ import type { BlockModel, Store } from '@blocksuite/store';
 import { beforeEach, describe, expect, test } from 'vitest';
 import * as Y from 'yjs';
 
-import { wait } from '../utils/common.js';
+import { click, wait } from '../utils/common.js';
 import {
   addNote as _addNote,
   getDocRootBlock,
@@ -30,6 +30,60 @@ const addNote = (doc: Store, props: Record<string, unknown> = {}) => {
     index: service.layer.generateIndex(),
     ...props,
   });
+};
+
+const getSelectedElementId = () => {
+  return service.selection.surfaceSelections[0]?.elements[0] ?? null;
+};
+
+const clickEdgeless = async (x: number, y: number) => {
+  const edgeless = getDocRootBlock(doc, editor, 'edgeless');
+  click(edgeless.host, { x, y });
+  await wait();
+};
+
+type ReorderDirection = 'forward' | 'front' | 'backward' | 'back';
+
+const reorderElement = (id: string, direction: ReorderDirection) => {
+  const element = service.crud.getElementById(id);
+  if (!element) {
+    throw new Error(`Cannot find element ${id}`);
+  }
+
+  service.crud.updateElement(id, {
+    index: service.layer.getReorderedIndex(element, direction),
+  });
+};
+
+const createOverlappingShapes = () => {
+  return [
+    service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,100,100,100]',
+    })!,
+    service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[130,130,100,100]',
+    })!,
+    service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[160,160,100,100]',
+    })!,
+  ];
+};
+
+const createOverlappingNotes = () => {
+  return [
+    addNote(doc, {
+      xywh: '[100,100,200,100]',
+    }),
+    addNote(doc, {
+      xywh: '[130,100,200,100]',
+    }),
+    addNote(doc, {
+      xywh: '[160,100,200,100]',
+    }),
+  ];
 };
 
 beforeEach(async () => {
@@ -447,6 +501,176 @@ describe('layer reorder functionality', () => {
         layer.set.has(service.crud.getElementById(ids[2]) as any)
       )
     ).toBe(0);
+  });
+});
+
+describe('reordering hit testing', () => {
+  beforeEach(async () => {
+    service.viewport.setViewport(1, [
+      service.viewport.width / 2,
+      service.viewport.height / 2,
+    ]);
+    await wait();
+  });
+
+  describe('reordering shapes', () => {
+    test('bring to front', async () => {
+      const [rect0, , rect2] = createOverlappingShapes();
+      await wait();
+
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect2);
+
+      reorderElement(rect0, 'front');
+      await wait();
+
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect0);
+    });
+
+    test('bring forward', async () => {
+      const [rect0, rect1] = createOverlappingShapes();
+      await wait();
+
+      await clickEdgeless(150, 150);
+      expect(getSelectedElementId()).toBe(rect1);
+
+      reorderElement(rect0, 'forward');
+      await wait();
+
+      await clickEdgeless(150, 150);
+      expect(getSelectedElementId()).toBe(rect0);
+    });
+
+    test('send backward', async () => {
+      const [, rect1, rect2] = createOverlappingShapes();
+      await wait();
+
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect2);
+
+      reorderElement(rect2, 'backward');
+      await wait();
+
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect1);
+    });
+
+    test('send to back', async () => {
+      const [rect0, rect1, rect2] = createOverlappingShapes();
+      await wait();
+
+      reorderElement(rect2, 'back');
+      await wait();
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect1);
+
+      reorderElement(rect1, 'back');
+      await wait();
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect0);
+    });
+
+    test('undo and redo', async () => {
+      const [, rect1, rect2] = createOverlappingShapes();
+      await wait();
+
+      doc.captureSync();
+      reorderElement(rect2, 'back');
+      await wait();
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect1);
+
+      doc.undo();
+      await wait();
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect2);
+
+      doc.redo();
+      await wait();
+      await clickEdgeless(180, 180);
+      expect(getSelectedElementId()).toBe(rect1);
+    });
+  });
+
+  describe('reordering notes', () => {
+    test('bring to front', async () => {
+      const [note0, , note2] = createOverlappingNotes();
+      await wait();
+
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note2);
+
+      reorderElement(note0, 'front');
+      await wait();
+
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note0);
+    });
+
+    test('bring forward', async () => {
+      const [note0, note1] = createOverlappingNotes();
+      await wait();
+
+      await clickEdgeless(150, 140);
+      expect(getSelectedElementId()).toBe(note1);
+
+      reorderElement(note0, 'forward');
+      await wait();
+
+      await clickEdgeless(150, 140);
+      expect(getSelectedElementId()).toBe(note0);
+    });
+
+    test('send backward', async () => {
+      const [, note1, note2] = createOverlappingNotes();
+      await wait();
+
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note2);
+
+      reorderElement(note2, 'backward');
+      await wait();
+
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note1);
+    });
+
+    test('send to back', async () => {
+      const [note0, note1, note2] = createOverlappingNotes();
+      await wait();
+
+      reorderElement(note2, 'back');
+      await wait();
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note1);
+
+      reorderElement(note1, 'back');
+      await wait();
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note0);
+    });
+
+    test('undo and redo', async () => {
+      const [, note1, note2] = createOverlappingNotes();
+      await wait();
+
+      doc.captureSync();
+      reorderElement(note2, 'back');
+      await wait();
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note1);
+
+      doc.undo();
+      await wait();
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note2);
+
+      doc.redo();
+      await wait();
+      await clickEdgeless(180, 140);
+      expect(getSelectedElementId()).toBe(note1);
+    });
   });
 });
 

@@ -3,7 +3,7 @@ import {
   databaseBlockProperties,
 } from '@blocksuite/affine/blocks/database';
 import type { DatabaseBlockModel } from '@blocksuite/affine/model';
-import type { SortBy } from '@blocksuite/data-view';
+import type { DataViewDataType } from '@blocksuite/data-view';
 import { Text } from '@blocksuite/store';
 import { beforeEach, expect, test } from 'vitest';
 
@@ -13,6 +13,21 @@ import { setupEditor } from '../utils/setup.js';
 type RowData = {
   name: string;
   age: string;
+};
+
+type SortRule = {
+  ref: {
+    type: 'ref';
+    name: string;
+  };
+  desc: boolean;
+};
+
+type SortableViewData = DataViewDataType & {
+  sort?: {
+    sortBy: SortRule[];
+    manuallySort: string[];
+  };
 };
 
 beforeEach(async () => {
@@ -75,8 +90,8 @@ test('database sort with multiple rules', async () => {
     dataSource.cellValueChange(rowId, ageColumnId, new Text(row.age));
   }
 
-  const setSortRules = (sortBy: SortBy[]) => {
-    dataSource.viewDataUpdate(tableViewId, data => ({
+  const setSortRules = (sortBy: SortRule[]) => {
+    dataSource.viewDataUpdate<SortableViewData>(tableViewId, data => ({
       sort: {
         ...(data.sort ?? { sortBy: [], manuallySort: [] }),
         sortBy,

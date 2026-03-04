@@ -207,14 +207,15 @@ test('press enter in title moves cursor to new paragraph', async () => {
     { index: 0, length: 0 },
     'world'
   );
+  const firstText = firstParagraph.text;
+  const secondText = secondParagraph.text;
+  if (!firstText || !secondText) {
+    throw new Error('Cannot find paragraph text after pressing Enter in title');
+  }
 
   await waitForCondition(
-    () =>
-      (note.children[0] as ParagraphBlockModel).text.toString() === 'world' &&
-      (note.children[1] as ParagraphBlockModel).text.toString() === ''
+    () => firstText.toString() === 'world' && secondText.toString() === ''
   );
-  expect(
-    note.children.map(child => (child as ParagraphBlockModel).text.toString())
-  ).toEqual(['world', '']);
+  expect([firstText.toString(), secondText.toString()]).toEqual(['world', '']);
   expect(getDocTitle()).toBe('hello');
 });

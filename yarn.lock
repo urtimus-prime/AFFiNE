@@ -1076,8 +1076,6 @@ __metadata:
     winston: "npm:^3.17.0"
     yjs: "npm:^13.6.27"
     zod: "npm:^3.25.76"
-  bin:
-    run-test: ./scripts/run-test.ts
   languageName: unknown
   linkType: soft
 

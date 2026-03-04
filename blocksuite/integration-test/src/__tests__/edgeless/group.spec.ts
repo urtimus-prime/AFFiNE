@@ -1,10 +1,15 @@
 import type { EdgelessRootBlockComponent } from '@blocksuite/affine/blocks/root';
 import {
-  type GroupElementModel,
+  createGroupFromSelectedCommand,
+  ungroupCommand,
+} from '@blocksuite/affine/gfx/group';
+import {
+  GroupElementModel,
   LayoutType,
   NoteDisplayMode,
 } from '@blocksuite/affine/model';
 import type { MindmapElementModel } from '@blocksuite/affine-model';
+import { batchAddChildren, batchRemoveChildren } from '@blocksuite/std/gfx';
 import { beforeEach, describe, expect, test } from 'vitest';
 import * as Y from 'yjs';
 
@@ -14,6 +19,34 @@ import { setupEditor } from '../utils/setup.js';
 
 describe('group', () => {
   let service!: EdgelessRootBlockComponent['service'];
+
+  const createGroupFromSelection = (elementIds: string[]) => {
+    service.selection.set({
+      elements: elementIds,
+      editing: false,
+    });
+    const [_, result] = service.std.command.exec(
+      createGroupFromSelectedCommand
+    );
+    if (!result.groupId) {
+      throw new Error('groupId is not found');
+    }
+    return result.groupId;
+  };
+
+  const getGroupId = (id: string) => service.surface.getGroup(id)?.id ?? null;
+
+  const getParentCountMap = (ids: string[]) => {
+    return ids.reduce(
+      (result, id) => {
+        const parentId = getGroupId(id);
+        const key = parentId ?? 'null';
+        result[key] = (result[key] ?? 0) + 1;
+        return result;
+      },
+      {} as Record<string, number>
+    );
+  };
 
   beforeEach(async () => {
     const cleanup = await setupEditor('edgeless');
@@ -230,6 +263,208 @@ describe('group', () => {
     expect(groups[0].descendantElements).toHaveLength(2);
     expect(groups[1].descendantElements).toHaveLength(1);
     expect(groups[2].descendantElements).toHaveLength(0);
+  });
+
+  test('group in group', () => {
+    const shape1 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shape2 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    const shape3 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[200,0,100,100]',
+    });
+    if (!shape1 || !shape2 || !shape3) {
+      throw new Error('shape id is not found');
+    }
+
+    const outerGroupId = createGroupFromSelection([shape1, shape2, shape3]);
+    doc.captureSync();
+
+    const innerGroupId = createGroupFromSelection([shape1, shape2]);
+    const allIds = [shape1, shape2, shape3, innerGroupId, outerGroupId];
+    expect(getParentCountMap(allIds)).toEqual({
+      [innerGroupId]: 2,
+      [outerGroupId]: 2,
+      null: 1,
+    });
+
+    doc.undo();
+    expect(getParentCountMap([shape1, shape2, shape3, outerGroupId])).toEqual({
+      [outerGroupId]: 3,
+      null: 1,
+    });
+
+    doc.redo();
+    expect(getParentCountMap(allIds)).toEqual({
+      [innerGroupId]: 2,
+      [outerGroupId]: 2,
+      null: 1,
+    });
+  });
+
+  test('ungroup in group', () => {
+    const shape1 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shape2 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    const shape3 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[200,0,100,100]',
+    });
+    if (!shape1 || !shape2 || !shape3) {
+      throw new Error('shape id is not found');
+    }
+
+    const outerGroupId = createGroupFromSelection([shape1, shape2, shape3]);
+    const innerGroupId = createGroupFromSelection([shape1, shape2]);
+    doc.captureSync();
+
+    service.std.command.exec(ungroupCommand, {
+      group: service.crud.getElementById(innerGroupId) as GroupElementModel,
+    });
+    expect(getParentCountMap([shape1, shape2, shape3, outerGroupId])).toEqual({
+      [outerGroupId]: 3,
+      null: 1,
+    });
+
+    doc.undo();
+    expect(
+      getParentCountMap([shape1, shape2, shape3, innerGroupId, outerGroupId])
+    ).toEqual({
+      [innerGroupId]: 2,
+      [outerGroupId]: 2,
+      null: 1,
+    });
+
+    doc.redo();
+    expect(getParentCountMap([shape1, shape2, shape3, outerGroupId])).toEqual({
+      [outerGroupId]: 3,
+      null: 1,
+    });
+  });
+
+  test('release element from group', () => {
+    const shape1 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shape2 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    const shape3 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[200,0,100,100]',
+    });
+    if (!shape1 || !shape2 || !shape3) {
+      throw new Error('shape id is not found');
+    }
+
+    const outerGroupId = createGroupFromSelection([shape1, shape2, shape3]);
+    const shape = service.crud.getElementById(shape1);
+    if (!shape || !shape.group) {
+      throw new Error('shape group is not found');
+    }
+
+    doc.captureSync();
+
+    const group = shape.group;
+    batchRemoveChildren(group, [shape]);
+    shape.index = service.layer.generateIndex();
+
+    const parent = group.group;
+    if (parent && parent instanceof GroupElementModel) {
+      batchAddChildren(parent, [shape]);
+    }
+
+    expect(getParentCountMap([shape1, shape2, shape3, outerGroupId])).toEqual({
+      [outerGroupId]: 2,
+      null: 2,
+    });
+
+    doc.undo();
+    expect(getParentCountMap([shape1, shape2, shape3, outerGroupId])).toEqual({
+      [outerGroupId]: 3,
+      null: 1,
+    });
+
+    doc.redo();
+    expect(getParentCountMap([shape1, shape2, shape3, outerGroupId])).toEqual({
+      [outerGroupId]: 2,
+      null: 2,
+    });
+  });
+
+  test('release group from group', () => {
+    const shape1 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shape2 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    const shape3 = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[200,0,100,100]',
+    });
+    if (!shape1 || !shape2 || !shape3) {
+      throw new Error('shape id is not found');
+    }
+
+    const outerGroupId = createGroupFromSelection([shape1, shape2, shape3]);
+    const innerGroupId = createGroupFromSelection([shape1, shape2]);
+
+    const innerGroup = service.crud.getElementById(innerGroupId);
+    if (!innerGroup || !innerGroup.group) {
+      throw new Error('inner group is not found');
+    }
+
+    doc.captureSync();
+
+    const group = innerGroup.group;
+    batchRemoveChildren(group, [innerGroup]);
+    innerGroup.index = service.layer.generateIndex();
+
+    const parent = group.group;
+    if (parent && parent instanceof GroupElementModel) {
+      batchAddChildren(parent, [innerGroup]);
+    }
+
+    expect(
+      getParentCountMap([shape1, shape2, shape3, innerGroupId, outerGroupId])
+    ).toEqual({
+      [innerGroupId]: 2,
+      [outerGroupId]: 1,
+      null: 2,
+    });
+
+    doc.undo();
+    expect(
+      getParentCountMap([shape1, shape2, shape3, innerGroupId, outerGroupId])
+    ).toEqual({
+      [innerGroupId]: 2,
+      [outerGroupId]: 2,
+      null: 1,
+    });
+
+    doc.redo();
+    expect(
+      getParentCountMap([shape1, shape2, shape3, innerGroupId, outerGroupId])
+    ).toEqual({
+      [innerGroupId]: 2,
+      [outerGroupId]: 1,
+      null: 2,
+    });
   });
 });
 
