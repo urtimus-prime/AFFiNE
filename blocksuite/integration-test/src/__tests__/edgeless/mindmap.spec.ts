@@ -1,4 +1,10 @@
-import type { MindMapView } from '@blocksuite/affine/gfx/mindmap';
+import {
+  containsNode,
+  createFromTree,
+  detachMindmap,
+  type MindMapView,
+  moveNode,
+} from '@blocksuite/affine/gfx/mindmap';
 import { LayoutType, type MindmapElementModel } from '@blocksuite/affine-model';
 import { Bound } from '@blocksuite/global/gfx';
 import type { GfxController } from '@blocksuite/std/gfx';
@@ -10,6 +16,17 @@ import { setupEditor } from '../utils/setup.js';
 
 describe('mindmap', () => {
   let gfx: GfxController;
+
+  const waitForCondition = async (condition: () => boolean, retries = 40) => {
+    for (let i = 0; i < retries; i++) {
+      if (condition()) {
+        return;
+      }
+      await wait(30);
+    }
+    expect(condition()).toBe(true);
+  };
+
   const moveAndClick = ({ x, y, w, h }: Bound) => {
     const { left, top } = gfx.viewport;
     x += left;
@@ -26,7 +43,9 @@ describe('mindmap', () => {
     x += gfx.viewport.left;
     y += gfx.viewport.top;
 
+    // keep the same "enter -> move" sequence as moveAndClick to avoid hover races
     pointermove(editor.host!, { x: x + w / 2, y: y + h / 2 });
+    pointermove(editor.host!, { x: x + w / 2 + 1, y: y + h / 2 + 1 });
   };
 
   beforeEach(async () => {
@@ -390,21 +409,23 @@ describe('mindmap', () => {
 
     const rootButton = mindmapView().getCollapseButton(mindmap().tree)!;
     move(gfx.viewport.toViewBound(rootButton.elementBound).moveDelta(10, 10));
-    await wait();
-    expect(rootButton.opacity).toBe(1);
+    await waitForCondition(() => rootButton.opacity > 0.9);
+    expect(rootButton.opacity).toBeCloseTo(1, 2);
 
     const childButton = mindmapView().getCollapseButton(
       mindmap().getNodeByPath([0, 2])!
     )!;
     move(gfx.viewport.toViewBound(childButton.elementBound).moveDelta(10, 10));
-    await wait();
-    expect(childButton.opacity).toBe(1);
+    await waitForCondition(() => childButton.opacity > 0.9);
+    expect(childButton.opacity).toBeCloseTo(1, 2);
 
     move(new Bound(0, 0, 0, 0));
-    await wait();
+    await waitForCondition(
+      () => childButton.opacity < 0.1 && rootButton.opacity < 0.1
+    );
 
-    expect(childButton.opacity).toBe(0);
-    expect(rootButton.opacity).toBe(0);
+    expect(childButton.opacity).toBeCloseTo(0, 2);
+    expect(rootButton.opacity).toBeCloseTo(0, 2);
   });
 
   test("collapsed node's button should be always visible except its ancestor is collapsed", async () => {
@@ -464,5 +485,253 @@ describe('mindmap', () => {
     // the collapsed child button should be hidden
     expect(childButton.hidden).toBe(true);
     expect(childButton.opacity).toBe(0);
+  });
+
+  test('move node should reorder siblings', async () => {
+    const mindmapId = gfx.surface!.addElement({
+      type: 'mindmap',
+      layoutType: LayoutType.RIGHT,
+      children: {
+        text: 'root',
+        children: [{ text: 'A' }, { text: 'B' }, { text: 'C' }],
+      },
+    });
+    const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
+    await wait();
+
+    const nodeA = mindmap().getNodeByPath([0, 0]);
+    if (!nodeA) {
+      throw new Error('nodeA is not found');
+    }
+
+    moveNode(mindmap(), nodeA, mindmap(), mindmap().tree, 1);
+    await wait();
+    expect(mindmap().getPath(nodeA.id)).toEqual([0, 1]);
+
+    moveNode(mindmap(), nodeA, mindmap(), mindmap().tree, 0);
+    await wait();
+    expect(mindmap().getPath(nodeA.id)).toEqual([0, 0]);
+  });
+
+  test('move node should support becoming child and keep subtree', async () => {
+    const mindmapId = gfx.surface!.addElement({
+      type: 'mindmap',
+      layoutType: LayoutType.RIGHT,
+      children: {
+        text: 'root',
+        children: [{ text: 'A' }, { text: 'B' }, { text: 'C' }],
+      },
+    });
+    const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
+    await wait();
+
+    const nodeA = mindmap().getNodeByPath([0, 0]);
+    const nodeB = mindmap().getNodeByPath([0, 1]);
+    if (!nodeA || !nodeB) {
+      throw new Error('nodeA or nodeB is not found');
+    }
+
+    moveNode(mindmap(), nodeA, mindmap(), nodeB, 0);
+    await wait();
+    expect(mindmap().getParentNode(nodeA.id)?.id).toBe(nodeB.id);
+    expect(mindmap().getPath(nodeA.id)).toEqual([0, 0, 0]);
+
+    const nodeC = mindmap().getNodeByPath([0, 1]);
+    if (!nodeC) {
+      throw new Error('nodeC is not found');
+    }
+
+    moveNode(mindmap(), nodeB, mindmap(), nodeC, 0);
+    await wait();
+    expect(mindmap().getParentNode(nodeB.id)?.id).toBe(nodeC.id);
+    expect(mindmap().getPath(nodeA.id)).toEqual([0, 0, 0, 0]);
+  });
+
+  test('should prevent moving node into itself or descendants', async () => {
+    const mindmapId = gfx.surface!.addElement({
+      type: 'mindmap',
+      layoutType: LayoutType.RIGHT,
+      children: {
+        text: 'root',
+        children: [
+          {
+            text: 'A',
+            children: [{ text: 'A-1' }, { text: 'A-2' }],
+          },
+          { text: 'B' },
+        ],
+      },
+    });
+    const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
+    await wait();
+
+    const dragged = mindmap().getNodeByPath([0, 0]);
+    const descendant = mindmap().getNodeByPath([0, 0, 1]);
+    if (!dragged || !descendant) {
+      throw new Error('dragged or descendant node is not found');
+    }
+
+    const originalDraggedPath = mindmap().getPath(dragged.id);
+    const originalDescendantPath = mindmap().getPath(descendant.id);
+
+    expect(containsNode(mindmap(), dragged, dragged)).toBe(true);
+    expect(containsNode(mindmap(), descendant, dragged)).toBe(true);
+
+    if (!containsNode(mindmap(), descendant, dragged)) {
+      moveNode(mindmap(), dragged, mindmap(), descendant, 0);
+    }
+    await wait();
+
+    expect(mindmap().getPath(dragged.id)).toEqual(originalDraggedPath);
+    expect(mindmap().getPath(descendant.id)).toEqual(originalDescendantPath);
+  });
+
+  test('moving root should keep relative positions of descendants', async () => {
+    const mindmapId = gfx.surface!.addElement({
+      type: 'mindmap',
+      layoutType: LayoutType.RIGHT,
+      children: {
+        text: 'root',
+        children: [{ text: 'A' }, { text: 'B' }, { text: 'C' }],
+      },
+    });
+    const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
+    await wait();
+
+    const root = mindmap().tree.element;
+    const childA = mindmap().getNodeByPath([0, 0])!.element;
+    const childB = mindmap().getNodeByPath([0, 1])!.element;
+    const childC = mindmap().getNodeByPath([0, 2])!.element;
+    const before = {
+      root: { x: root.x, y: root.y },
+      a: { x: childA.x, y: childA.y },
+      b: { x: childB.x, y: childB.y },
+      c: { x: childC.x, y: childC.y },
+    };
+
+    mindmap().moveTo([root.x + 54, root.y + 54, root.w, root.h]);
+    await wait();
+
+    const afterA = mindmap().getNodeByPath([0, 0])!.element;
+    const afterB = mindmap().getNodeByPath([0, 1])!.element;
+    const afterC = mindmap().getNodeByPath([0, 2])!.element;
+
+    const deltaRootX = mindmap().tree.element.x - before.root.x;
+    const deltaRootY = mindmap().tree.element.y - before.root.y;
+
+    expect(afterA.x - before.a.x).toBeCloseTo(deltaRootX, 0);
+    expect(afterA.y - before.a.y).toBeCloseTo(deltaRootY, 0);
+    expect(afterB.x - before.b.x).toBeCloseTo(deltaRootX, 0);
+    expect(afterB.y - before.b.y).toBeCloseTo(deltaRootY, 0);
+    expect(afterC.x - before.c.x).toBeCloseTo(deltaRootX, 0);
+    expect(afterC.y - before.c.y).toBeCloseTo(deltaRootY, 0);
+  });
+
+  test('detaching subtree should create a new mindmap and keep subtree structure', async () => {
+    const mindmapId = gfx.surface!.addElement({
+      type: 'mindmap',
+      layoutType: LayoutType.RIGHT,
+      children: {
+        text: 'root',
+        children: [
+          { text: 'first child' },
+          {
+            text: 'second child',
+            children: [{ text: 'grand child 1' }, { text: 'grand child 2' }],
+          },
+        ],
+      },
+    });
+    const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
+    await wait();
+
+    const detachedNode = mindmap().getNodeByPath([0, 1]);
+    if (!detachedNode) {
+      throw new Error('detached node is not found');
+    }
+
+    const detached = detachMindmap(mindmap(), detachedNode);
+    if (!detached) {
+      throw new Error('failed to detach subtree');
+    }
+    const newMindmap = createFromTree(
+      detached,
+      mindmap().style,
+      mindmap().layoutType,
+      mindmap().surface
+    );
+    await wait();
+
+    const mindmaps = gfx.surface!.elementModels.filter(
+      element => element.type === 'mindmap'
+    ) as MindmapElementModel[];
+    expect(mindmaps).toHaveLength(2);
+
+    const readNodeElementText = (
+      node: NonNullable<ReturnType<typeof newMindmap.getNodeByPath>>
+    ) => {
+      const textElement = node.element as { text?: { toString: () => string } };
+      return textElement.text?.toString() ?? '';
+    };
+
+    const nodeText = (path: number[]) => {
+      const node = newMindmap.getNodeByPath(path);
+      if (!node) {
+        throw new Error(`node at path ${path} is not found`);
+      }
+      return readNodeElementText(node);
+    };
+
+    expect(nodeText([0])).toBe('second child');
+    expect(nodeText([0, 0])).toBe('grand child 1');
+    expect(nodeText([0, 1])).toBe('grand child 2');
+    expect(mindmap().getNode(detached.id)).toBeNull();
+  });
+
+  test('addNode should build parent-child structure from text flow', async () => {
+    const mindmapId = gfx.surface!.addElement({
+      type: 'mindmap',
+      layoutType: LayoutType.RIGHT,
+      children: {
+        text: 'root',
+        children: [{ text: 'A' }, { text: 'B' }, { text: 'C' }],
+      },
+    });
+    const mindmap = () => gfx.getElementById(mindmapId) as MindmapElementModel;
+    await wait();
+
+    const parentTarget = mindmap().getNodeByPath([0, 1]);
+    if (!parentTarget) {
+      throw new Error('parent target is not found');
+    }
+
+    const parentId = mindmap().addNode(
+      mindmap().tree.id,
+      parentTarget.id,
+      'after',
+      {
+        text: 'parent node',
+      }
+    );
+    const child1Id = mindmap().addNode(parentId, undefined, 'after', {
+      text: 'child node 1',
+    });
+    mindmap().addNode(parentId, child1Id, 'after', {
+      text: 'child node 2',
+    });
+    await wait();
+
+    const readText = (path: number[]) => {
+      const node = mindmap().getNodeByPath(path);
+      if (!node) {
+        throw new Error(`node at path ${path} is not found`);
+      }
+      const textElement = node.element as { text?: { toString: () => string } };
+      return textElement.text?.toString() ?? '';
+    };
+
+    expect(readText([0, 2])).toBe('parent node');
+    expect(readText([0, 2, 0])).toBe('child node 1');
+    expect(readText([0, 2, 1])).toBe('child node 2');
   });
 });

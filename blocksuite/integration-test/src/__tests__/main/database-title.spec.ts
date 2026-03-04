@@ -19,6 +19,29 @@ type TitleCellElement = HTMLElement & {
   selectCurrentCell?: (editing: boolean) => void;
 };
 
+const getLinkedDocPopover = () =>
+  document.querySelector('.linked-doc-popover') ??
+  document.querySelector('affine-linked-doc-popover');
+
+const pressArrow = (key: 'ArrowLeft' | 'ArrowRight') => {
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key,
+      code: key,
+      bubbles: true,
+      cancelable: true,
+    })
+  );
+  document.dispatchEvent(
+    new KeyboardEvent('keyup', {
+      key,
+      code: key,
+      bubbles: true,
+      cancelable: true,
+    })
+  );
+};
+
 beforeEach(async () => {
   const cleanup = await setupEditor('page');
   return cleanup;
@@ -103,8 +126,13 @@ test('opens linked doc popover from database title cell trigger', async () => {
 
   await wait(200);
 
-  expect(
-    document.querySelector('.linked-doc-popover') ??
-      document.querySelector('affine-linked-doc-popover')
-  ).toBeTruthy();
+  expect(getLinkedDocPopover()).toBeTruthy();
+
+  pressArrow('ArrowRight');
+  await wait(80);
+  expect(getLinkedDocPopover()).toBeTruthy();
+
+  pressArrow('ArrowLeft');
+  await wait(80);
+  expect(getLinkedDocPopover()).toBeTruthy();
 });

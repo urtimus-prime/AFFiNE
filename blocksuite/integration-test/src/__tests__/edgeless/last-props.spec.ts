@@ -2,6 +2,8 @@ import type { EdgelessRootBlockComponent } from '@blocksuite/affine/blocks/root'
 import { getSurfaceBlock } from '@blocksuite/affine/blocks/surface';
 import {
   type BrushElementModel,
+  type Color,
+  ColorScheme,
   type ConnectorElementModel,
   DEFAULT_NOTE_SHADOW,
   DefaultTheme,
@@ -17,7 +19,10 @@ import {
   ShapeType,
   type TextElementModel,
 } from '@blocksuite/affine/model';
-import { EditPropsStore } from '@blocksuite/affine/shared/services';
+import {
+  EditPropsStore,
+  ThemeProvider,
+} from '@blocksuite/affine/shared/services';
 import type { BlockStdScope } from '@blocksuite/std';
 import { beforeEach, describe, expect, test } from 'vitest';
 
@@ -37,6 +42,12 @@ describe('apply last props', () => {
     std = edgelessRoot.std;
     return cleanup;
   });
+
+  const resolveColor = (color: Color, theme: ColorScheme) => {
+    return std
+      .get(ThemeProvider)
+      .getColorValue(color, DefaultTheme.transparent, true, theme);
+  };
 
   test('shapes', () => {
     // rect shape
@@ -174,6 +185,18 @@ describe('apply last props', () => {
     expect(connector3.labelStyle.fontFamily).toBe(FontFamily.Kalam);
   });
 
+  test('connector label color follows theme for black preset', () => {
+    const id = service.crud.addElement('connector', { mode: 0 });
+    if (!id) {
+      throw new Error('id is not found');
+    }
+    const connector = service.crud.getElementById(id) as ConnectorElementModel;
+    const labelColor = connector.labelStyle.color;
+
+    expect(resolveColor(labelColor, ColorScheme.Light)).toBe('#000000');
+    expect(resolveColor(labelColor, ColorScheme.Dark)).toBe('#ffffff');
+  });
+
   test('brush', () => {
     const id = service.crud.addElement('brush', {});
     if (!id) {
@@ -246,6 +269,39 @@ describe('apply last props', () => {
     const text2 = service.crud.getElementById(id2) as EdgelessTextBlockModel;
     expect(text2.props.color).toBe(DefaultTheme.StrokeColorShortMap.Green);
     expect(text2.props.fontFamily).toBe(FontFamily.OrelegaOne);
+  });
+
+  test('edgeless-text default black follows theme mapping', () => {
+    const surface = getSurfaceBlock(doc);
+    const id = service.crud.addBlock('affine:edgeless-text', {}, surface!.id);
+    if (!id) {
+      throw new Error('id is not found');
+    }
+
+    const text = service.crud.getElementById(id) as EdgelessTextBlockModel;
+    expect(resolveColor(text.props.color, ColorScheme.Light)).toBe('#000000');
+    expect(resolveColor(text.props.color, ColorScheme.Dark)).toBe('#ffffff');
+  });
+
+  test('shape text pure colors should stay unchanged after theme switch', () => {
+    const id = service.crud.addElement('shape', {
+      shapeType: ShapeType.Rect,
+    });
+    if (!id) {
+      throw new Error('id is not found');
+    }
+
+    const shape = service.crud.getElementById(id) as ShapeElementModel;
+    expect(resolveColor(shape.color, ColorScheme.Light)).toBe('#000000');
+    expect(resolveColor(shape.color, ColorScheme.Dark)).toBe('#000000');
+
+    service.crud.updateElement(id, {
+      color: DefaultTheme.pureWhite,
+    });
+
+    const updated = service.crud.getElementById(id) as ShapeElementModel;
+    expect(resolveColor(updated.color, ColorScheme.Light)).toBe('#ffffff');
+    expect(resolveColor(updated.color, ColorScheme.Dark)).toBe('#ffffff');
   });
 
   test('note', () => {

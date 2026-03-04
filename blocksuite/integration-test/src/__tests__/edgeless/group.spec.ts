@@ -1,15 +1,28 @@
-import type { EdgelessRootBlockComponent } from '@blocksuite/affine/blocks/root';
+import {
+  duplicate,
+  type EdgelessRootBlockComponent,
+} from '@blocksuite/affine/blocks/root';
+import { ConnectorTool } from '@blocksuite/affine/gfx/connector';
 import {
   createGroupFromSelectedCommand,
+  mountGroupTitleEditor,
   ungroupCommand,
 } from '@blocksuite/affine/gfx/group';
 import {
+  type ConnectorElementModel,
+  ConnectorMode,
   GroupElementModel,
   LayoutType,
   NoteDisplayMode,
 } from '@blocksuite/affine/model';
 import type { MindmapElementModel } from '@blocksuite/affine-model';
-import { batchAddChildren, batchRemoveChildren } from '@blocksuite/std/gfx';
+import { PointerEventState } from '@blocksuite/std';
+import type { GfxModel } from '@blocksuite/std/gfx';
+import {
+  batchAddChildren,
+  batchRemoveChildren,
+  GfxElementModelView,
+} from '@blocksuite/std/gfx';
 import { beforeEach, describe, expect, test } from 'vitest';
 import * as Y from 'yjs';
 
@@ -18,6 +31,7 @@ import { addNote, getDocRootBlock } from '../utils/edgeless.js';
 import { setupEditor } from '../utils/setup.js';
 
 describe('group', () => {
+  let edgeless!: EdgelessRootBlockComponent;
   let service!: EdgelessRootBlockComponent['service'];
 
   const createGroupFromSelection = (elementIds: string[]) => {
@@ -48,12 +62,224 @@ describe('group', () => {
     );
   };
 
+  const duplicateElement = async (id: string) => {
+    const model = service.crud.getElementById(id);
+    if (!model) {
+      throw new Error(`Cannot find element: ${id}`);
+    }
+
+    const prevIds = new Set(service.elements.map(element => element.id));
+    await duplicate(edgeless, [model as GfxModel], false);
+    await wait();
+
+    return service.elements.filter(element => !prevIds.has(element.id));
+  };
+
   beforeEach(async () => {
     const cleanup = await setupEditor('edgeless');
-    service = getDocRootBlock(window.doc, window.editor, 'edgeless').service;
+    edgeless = getDocRootBlock(window.doc, window.editor, 'edgeless');
+    service = edgeless.service;
 
     return cleanup;
   });
+
+  const setViewport = async () => {
+    service.viewport.setViewport(1, [
+      service.viewport.width / 2,
+      service.viewport.height / 2,
+    ]);
+    await wait();
+  };
+
+  const getLatestConnector = () => {
+    const connectors = service.elements.filter(
+      element => element.type === 'connector'
+    ) as ConnectorElementModel[];
+    const connector = connectors.at(-1);
+    if (!connector) {
+      throw new Error('connector is not found');
+    }
+    return connector;
+  };
+
+  const createTwoGroups = () => {
+    const shapeA = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shapeB = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,100,100,100]',
+    });
+    const shapeC = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[500,0,100,100]',
+    });
+    const shapeD = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[600,100,100,100]',
+    });
+    if (!shapeA || !shapeB || !shapeC || !shapeD) {
+      throw new Error('shape id is not found');
+    }
+
+    const group1Id = createGroupFromSelection([shapeA, shapeB]);
+    const group2Id = createGroupFromSelection([shapeC, shapeD]);
+
+    const group1 = service.crud.getElementById(group1Id);
+    const group2 = service.crud.getElementById(group2Id);
+
+    if (!(group1 instanceof GroupElementModel)) {
+      throw new Error('group1 is not found');
+    }
+    if (!(group2 instanceof GroupElementModel)) {
+      throw new Error('group2 is not found');
+    }
+
+    return {
+      shapeA,
+      group1,
+      group1Children: Array.from(group1.children.keys()),
+      group2,
+      group2Children: Array.from(group2.children.keys()),
+    };
+  };
+
+  type GroupTitleEditorElement = HTMLElement & {
+    inlineEditor?: {
+      setText: (text: string) => void;
+    };
+    inlineEditorContainer?: HTMLElement | null;
+  };
+
+  const waitForCondition = async (condition: () => boolean, retries = 40) => {
+    for (let i = 0; i < retries; i++) {
+      if (condition()) {
+        return;
+      }
+      await wait(30);
+    }
+    expect(condition()).toBe(true);
+  };
+
+  const createGroupForTitle = () => {
+    const shapeA = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shapeB = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    if (!shapeA || !shapeB) {
+      throw new Error('shape id is not found');
+    }
+
+    const groupId = createGroupFromSelection([shapeA, shapeB]);
+    const group = service.crud.getElementById(groupId);
+    if (!(group instanceof GroupElementModel)) {
+      throw new Error('group is not found');
+    }
+    return group;
+  };
+
+  const getGroupTitleEditor = () =>
+    document.querySelector<GroupTitleEditorElement>(
+      'edgeless-group-title-editor'
+    );
+
+  const waitForGroupTitleEditor = async (mounted: boolean) => {
+    await waitForCondition(() => {
+      return Boolean(getGroupTitleEditor()) === mounted;
+    });
+  };
+
+  const waitForGroupTitleBound = async (group: GroupElementModel) => {
+    await waitForCondition(() => Boolean(group.externalXYWH));
+  };
+
+  const dblclickGroupTitle = async (group: GroupElementModel) => {
+    const view = service.gfx.view.get(group.id);
+    if (!view || !(view instanceof GfxElementModelView)) {
+      throw new Error('group view is not found');
+    }
+
+    const rect = edgeless.host.getBoundingClientRect();
+    const pointerState = new PointerEventState({
+      event: new PointerEvent('pointerup', {
+        clientX: rect.left,
+        clientY: rect.top,
+        bubbles: true,
+        pointerId: 1,
+        isPrimary: true,
+      }),
+      rect,
+      startX: 0,
+      startY: 0,
+      last: null,
+    });
+
+    view.dispatch('dblclick', pointerState);
+    await wait();
+  };
+
+  const pressEnter = () => {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    document.dispatchEvent(
+      new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  };
+
+  const quickConnect = async (
+    source: GfxModel,
+    start: [number, number],
+    target: [number, number]
+  ) => {
+    edgeless.gfx.tool.setTool(ConnectorTool, {
+      mode: ConnectorMode.Curve,
+    });
+    const connectorTool = edgeless.gfx.tool.get(ConnectorTool);
+    connectorTool.quickConnect(
+      service.viewport.toViewCoord(start[0], start[1]),
+      source
+    );
+    await wait();
+
+    connectorTool.findTargetByPoint(service.viewport.toViewCoord(...target));
+    await wait();
+
+    return {
+      connector: getLatestConnector(),
+      connectorTool,
+    };
+  };
+
+  const expectAbsolutePath = (
+    connector: ConnectorElementModel,
+    expectedStart: [number, number],
+    expectedEnd: [number, number]
+  ) => {
+    const [start, end] = connector.absolutePath;
+    if (!start || !end) {
+      throw new Error('absolutePath is not found');
+    }
+    expect(start[0]).toBeCloseTo(expectedStart[0], 0);
+    expect(start[1]).toBeCloseTo(expectedStart[1], 0);
+    expect(end[0]).toBeCloseTo(expectedEnd[0], 0);
+    expect(end[1]).toBeCloseTo(expectedEnd[1], 0);
+  };
 
   test('group with no children will be removed automatically', () => {
     const map = new Y.Map<boolean>();
@@ -465,6 +691,282 @@ describe('group', () => {
       [outerGroupId]: 1,
       null: 2,
     });
+  });
+
+  test('copy and paste group', async () => {
+    const shapeA = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shapeB = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    if (!shapeA || !shapeB) {
+      throw new Error('shape id is not found');
+    }
+
+    const originGroupId = createGroupFromSelection([shapeA, shapeB]);
+    const added = await duplicateElement(originGroupId);
+    const copiedGroup = added.find(element => element.type === 'group');
+    if (!(copiedGroup instanceof GroupElementModel)) {
+      throw new Error('copied group is not found');
+    }
+
+    expect(
+      getParentCountMap(service.elements.map(element => element.id))
+    ).toEqual({
+      [originGroupId]: 2,
+      [copiedGroup.id]: 2,
+      null: 2,
+    });
+    expect(
+      (service.crud.getElementById(originGroupId) as GroupElementModel).children
+        .size
+    ).toBe(2);
+    expect(copiedGroup.children.size).toBe(2);
+  });
+
+  test('copy and paste group with connector', async () => {
+    await setViewport();
+
+    const shapeA = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shapeB = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[100,0,100,100]',
+    });
+    if (!shapeA || !shapeB) {
+      throw new Error('shape id is not found');
+    }
+    const sourceShape = service.crud.getElementById(shapeA);
+    if (!sourceShape) {
+      throw new Error('source shape is not found');
+    }
+
+    const { connector } = await quickConnect(sourceShape, [100, 50], [150, 50]);
+    const originGroupId = createGroupFromSelection([
+      shapeA,
+      shapeB,
+      connector.id,
+    ]);
+    const added = await duplicateElement(originGroupId);
+
+    const copiedGroup = added.find(element => element.type === 'group');
+    const copiedConnector = added.find(element => element.type === 'connector');
+    if (!(copiedGroup instanceof GroupElementModel)) {
+      throw new Error('copied group is not found');
+    }
+    if (!(copiedConnector && copiedConnector.type === 'connector')) {
+      throw new Error('copied connector is not found');
+    }
+
+    expect(
+      getParentCountMap(service.elements.map(element => element.id))
+    ).toEqual({
+      [originGroupId]: 3,
+      [copiedGroup.id]: 3,
+      null: 2,
+    });
+    expect(
+      (service.crud.getElementById(originGroupId) as GroupElementModel).children
+        .size
+    ).toBe(3);
+    expect(copiedGroup.children.size).toBe(3);
+
+    const copiedConnectorModel = service.crud.getElementById(
+      copiedConnector.id
+    ) as ConnectorElementModel;
+    if (!copiedConnectorModel.source?.id || !copiedConnectorModel.target?.id) {
+      throw new Error('copied connector endpoint is not found');
+    }
+    expect(copiedGroup.children.has(copiedConnectorModel.id)).toBe(true);
+    expect(copiedGroup.children.has(copiedConnectorModel.source.id)).toBe(true);
+    expect(copiedGroup.children.has(copiedConnectorModel.target.id)).toBe(true);
+  });
+
+  test('copy and paste group with shape and note inside', async () => {
+    const shapeId = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    if (!shapeId) {
+      throw new Error('shape id is not found');
+    }
+    const noteId = addNote(doc, {
+      xywh: '[100,-100,800,100]',
+    });
+
+    const groupId = createGroupFromSelection([shapeId, noteId]);
+    expect(service.edgelessElements.length).toBe(3);
+
+    await duplicateElement(groupId);
+    expect(service.edgelessElements.length).toBe(6);
+  });
+
+  test('copy and paste group with group inside', async () => {
+    const shapeA = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    const shapeB = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[200,0,100,100]',
+    });
+    if (!shapeA || !shapeB) {
+      throw new Error('shape id is not found');
+    }
+
+    const innerGroupId = createGroupFromSelection([shapeA, shapeB]);
+    const noteId = addNote(doc, {
+      xywh: '[100,-200,800,100]',
+    });
+    const outerGroupId = createGroupFromSelection([innerGroupId, noteId]);
+
+    expect(service.edgelessElements.length).toBe(5);
+    await duplicateElement(outerGroupId);
+    expect(service.edgelessElements.length).toBe(10);
+  });
+
+  test('copy and paste group with frame inside', async () => {
+    const shapeA = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[0,0,100,100]',
+    });
+    if (!shapeA) {
+      throw new Error('shape id is not found');
+    }
+    const noteId = addNote(doc, {
+      xywh: '[100,-100,800,100]',
+    });
+
+    service.selection.set({
+      elements: [shapeA, noteId],
+      editing: false,
+    });
+    const frame = service.frame.createFrameOnSelected();
+    if (!frame) {
+      throw new Error('frame is not found');
+    }
+
+    const shapeB = service.crud.addElement('shape', {
+      shapeType: 'rect',
+      xywh: '[700,0,100,100]',
+    });
+    if (!shapeB) {
+      throw new Error('shape id is not found');
+    }
+
+    const groupId = createGroupFromSelection([frame.id, shapeB]);
+
+    expect(service.edgelessElements.length).toBe(5);
+    await duplicateElement(groupId);
+    expect(service.edgelessElements.length).toBe(10);
+  });
+
+  test('connector quick connect should connect group to group', async () => {
+    await setViewport();
+    const { group2 } = createTwoGroups();
+    const { connector } = await quickConnect(group2, [500, 100], [200, 50]);
+    expect(connector.source?.id).toBe(group2.id);
+    expectAbsolutePath(connector, [500, 100], [200, 50]);
+  });
+
+  test('connector quick connect should connect group to a child in another group', async () => {
+    await setViewport();
+    const { group2, group1Children } = createTwoGroups();
+
+    const { connector, connectorTool } = await quickConnect(
+      group2,
+      [500, 100],
+      [200, 100]
+    );
+    expectAbsolutePath(connector, [500, 100], [200, 100]);
+
+    connectorTool.findTargetByPoint(service.viewport.toViewCoord(190, 150));
+    await wait();
+    expect(group1Children).toContain(connector.target?.id);
+    expectAbsolutePath(connector, [500, 100], [200, 150]);
+  });
+
+  test('connector quick connect should allow switching target from child to group', async () => {
+    await setViewport();
+    const { shapeA, group2, group2Children } = createTwoGroups();
+    const sourceShape = service.crud.getElementById(shapeA);
+    if (!sourceShape) {
+      throw new Error('source shape is not found');
+    }
+
+    const { connector, connectorTool } = await quickConnect(
+      sourceShape,
+      [100, 50],
+      [610, 50]
+    );
+    expect([group2.id, ...group2Children]).toContain(connector.target?.id);
+    expectAbsolutePath(connector, [100, 50], [600, 0]);
+
+    connectorTool.findTargetByPoint(service.viewport.toViewCoord(600, 100));
+    await wait();
+    expect([group2.id, ...group2Children]).toContain(connector.target?.id);
+    expectAbsolutePath(connector, [100, 50], [600, 100]);
+  });
+
+  test('edit group title by component toolbar', async () => {
+    const group = createGroupForTitle();
+    expect(getGroupTitleEditor()).toBeNull();
+
+    await waitForGroupTitleBound(group);
+    mountGroupTitleEditor(group, edgeless);
+    await waitForGroupTitleEditor(true);
+  });
+
+  test('edit group title by dbclick', async () => {
+    const group = createGroupForTitle();
+    expect(getGroupTitleEditor()).toBeNull();
+
+    await waitForGroupTitleBound(group);
+    await dblclickGroupTitle(group);
+    await waitForGroupTitleEditor(true);
+    await waitForCondition(() => !!getGroupTitleEditor()?.inlineEditor);
+
+    const titleEditor = getGroupTitleEditor();
+    if (!titleEditor?.inlineEditor) {
+      throw new Error('group title editor inline editor is not found');
+    }
+    titleEditor.inlineEditor.setText('ABC');
+    await wait();
+    expect(group.title.toString()).toBe('ABC');
+  });
+
+  test('blur unmount group editor', async () => {
+    const group = createGroupForTitle();
+
+    await waitForGroupTitleBound(group);
+    await dblclickGroupTitle(group);
+    await waitForGroupTitleEditor(true);
+    await waitForCondition(
+      () => !!getGroupTitleEditor()?.inlineEditorContainer
+    );
+
+    const titleEditor = getGroupTitleEditor();
+    if (!titleEditor?.inlineEditorContainer) {
+      throw new Error('group title editor inline container is not found');
+    }
+    titleEditor.inlineEditorContainer.dispatchEvent(new FocusEvent('blur'));
+    await waitForGroupTitleEditor(false);
+  });
+
+  test('enter unmount group editor', async () => {
+    const group = createGroupForTitle();
+
+    await waitForGroupTitleBound(group);
+    await dblclickGroupTitle(group);
+    await waitForGroupTitleEditor(true);
+
+    pressEnter();
+    await waitForGroupTitleEditor(false);
   });
 });
 

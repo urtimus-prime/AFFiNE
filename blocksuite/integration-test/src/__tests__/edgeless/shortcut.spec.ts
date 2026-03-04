@@ -1,9 +1,14 @@
 import type { EdgelessRootBlockComponent } from '@blocksuite/affine/blocks/root';
-import { type ShapeName, ShapeType } from '@blocksuite/affine/model';
+import type {
+  HighlighterElementModel,
+  ShapeName,
+} from '@blocksuite/affine/model';
+import { ShapeType } from '@blocksuite/affine/model';
+import { HighlighterTool } from '@blocksuite/affine-gfx-brush';
 import { ShapeTool } from '@blocksuite/affine-gfx-shape';
 import { beforeEach, describe, expect, test } from 'vitest';
 
-import { click, wait } from '../utils/common.js';
+import { click, drag, wait } from '../utils/common.js';
 import { addNote, getDocRootBlock } from '../utils/edgeless.js';
 import { setupEditor } from '../utils/setup.js';
 
@@ -211,6 +216,35 @@ describe('tool shortcuts', () => {
     await wait();
     expect(getCurrentToolName()).toBe('shape');
     expect(getCurrentShapeName()).toBe(ShapeType.Rect);
+  });
+
+  test('should enter highlighter tool', async () => {
+    edgeless.gfx.tool.setTool(HighlighterTool);
+    await waitForCondition(() => getCurrentToolName() === 'highlighter');
+    expect(getCurrentToolName()).toBe('highlighter');
+  });
+
+  test('should exit highlighter tool when Escape is pressed', async () => {
+    edgeless.gfx.tool.setTool(HighlighterTool);
+    await waitForCondition(() => getCurrentToolName() === 'highlighter');
+
+    pressKey({ key: 'Escape', code: 'Escape' });
+    await wait();
+    expect(getCurrentToolName()).toBe('default');
+  });
+
+  test('new highlighter stroke should use default line width', async () => {
+    edgeless.gfx.tool.setTool(HighlighterTool);
+    await waitForCondition(() => getCurrentToolName() === 'highlighter');
+
+    drag(edgeless.host, { x: 120, y: 180 }, { x: 220, y: 280 });
+    await wait();
+
+    const highlighters = service.surface.elementModels.filter(
+      element => element.type === 'highlighter'
+    ) as HighlighterElementModel[];
+    expect(highlighters).toHaveLength(1);
+    expect(highlighters[0].lineWidth).toBe(22);
   });
 });
 
