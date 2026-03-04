@@ -33,6 +33,7 @@ export const PackageList = [
       'blocksuite/affine/fragments/frame-panel',
       'blocksuite/affine/fragments/outline',
       'blocksuite/affine/gfx/brush',
+      'blocksuite/affine/gfx/comfyui',
       'blocksuite/affine/gfx/connector',
       'blocksuite/affine/gfx/group',
       'blocksuite/affine/gfx/link',
@@ -549,6 +550,20 @@ export const PackageList = [
       'blocksuite/affine/ext-loader',
       'blocksuite/affine/model',
       'blocksuite/affine/rich-text',
+      'blocksuite/affine/shared',
+      'blocksuite/affine/widgets/edgeless-toolbar',
+      'blocksuite/framework/global',
+      'blocksuite/framework/std',
+      'blocksuite/framework/store',
+    ],
+  },
+  {
+    location: 'blocksuite/affine/gfx/comfyui',
+    name: '@blocksuite/affine-gfx-comfyui',
+    workspaceDependencies: [
+      'blocksuite/affine/blocks/surface',
+      'blocksuite/affine/ext-loader',
+      'blocksuite/affine/model',
       'blocksuite/affine/shared',
       'blocksuite/affine/widgets/edgeless-toolbar',
       'blocksuite/framework/global',
@@ -1541,6 +1556,7 @@ export type PackageName =
   | '@blocksuite/affine-fragment-frame-panel'
   | '@blocksuite/affine-fragment-outline'
   | '@blocksuite/affine-gfx-brush'
+  | '@blocksuite/affine-gfx-comfyui'
   | '@blocksuite/affine-gfx-connector'
   | '@blocksuite/affine-gfx-group'
   | '@blocksuite/affine-gfx-link'

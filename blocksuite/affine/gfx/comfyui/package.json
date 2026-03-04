@@ -1,0 +1,27 @@
+{
+  "name": "@blocksuite/affine-gfx-comfyui",
+  "description": "ComfyUI workflow editor integration for BlockSuite edgeless canvas.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@blocksuite/affine-block-surface": "workspace:*",
+    "@blocksuite/affine-ext-loader": "workspace:*",
+    "@blocksuite/affine-model": "workspace:*",
+    "@blocksuite/affine-shared": "workspace:*",
+    "@blocksuite/affine-widget-edgeless-toolbar": "workspace:*",
+    "@blocksuite/global": "workspace:*",
+    "@blocksuite/std": "workspace:*",
+    "@blocksuite/store": "workspace:*",
+    "lit": "^3.2.0",
+    "zod": "^3.25.76"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/store.ts",
+    "./view": "./src/view.ts"
+  },
+  "version": "0.26.3"
+}

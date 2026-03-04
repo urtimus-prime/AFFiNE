@@ -144,6 +144,13 @@ export class SurfaceBlockModel extends BaseSurfaceModel {
 
   override _init() {
     this._extendElement(elementsCtorMap);
+    // Register external element types (e.g. comfy-node) BEFORE super._init()
+    // so they are available when elements are instantiated from the Y.Map.
+    this.store.provider
+      .getAll(surfaceMiddlewareIdentifier)
+      .forEach(({ middleware }) => {
+        this._disposables.add(middleware(this));
+      });
     super._init();
     this._rebuildConnectorIndex();
     this._connectorIndexDisposables.add(
@@ -180,11 +187,6 @@ export class SurfaceBlockModel extends BaseSurfaceModel {
       this._connectorIdsByEndpoint.clear();
       this._connectorEndpoints.clear();
     });
-    this.store.provider
-      .getAll(surfaceMiddlewareIdentifier)
-      .forEach(({ middleware }) => {
-        this._disposables.add(middleware(this));
-      });
   }
 
   getConnectors(id: string) {

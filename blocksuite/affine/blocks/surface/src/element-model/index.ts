@@ -39,6 +39,8 @@ export enum CanvasElementType {
   SHAPE = 'shape',
   TEXT = 'text',
   HIGHLIGHTER = 'highlighter',
+  COMFY_NODE = 'comfy-node',
+  COMFY_CONNECTOR = 'comfy-connector',
 }
 
 export type ElementModelMap = {
