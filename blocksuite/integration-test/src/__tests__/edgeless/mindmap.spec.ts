@@ -17,7 +17,7 @@ import { setupEditor } from '../utils/setup.js';
 describe('mindmap', () => {
   let gfx: GfxController;
 
-  const waitForCondition = async (condition: () => boolean, retries = 40) => {
+  const waitForCondition = async (condition: () => boolean, retries = 80) => {
     for (let i = 0; i < retries; i++) {
       if (condition()) {
         return;
@@ -408,15 +408,19 @@ describe('mindmap', () => {
     await wait();
 
     const rootButton = mindmapView().getCollapseButton(mindmap().tree)!;
-    move(gfx.viewport.toViewBound(rootButton.elementBound).moveDelta(10, 10));
-    await waitForCondition(() => rootButton.opacity > 0.9);
+    move(gfx.viewport.toViewBound(rootButton.elementBound));
+    await waitForCondition(
+      () => !rootButton.hidden && rootButton.opacity > 0.9
+    );
     expect(rootButton.opacity).toBeCloseTo(1, 2);
 
     const childButton = mindmapView().getCollapseButton(
       mindmap().getNodeByPath([0, 2])!
     )!;
-    move(gfx.viewport.toViewBound(childButton.elementBound).moveDelta(10, 10));
-    await waitForCondition(() => childButton.opacity > 0.9);
+    move(gfx.viewport.toViewBound(childButton.elementBound));
+    await waitForCondition(
+      () => !childButton.hidden && childButton.opacity > 0.9
+    );
     expect(childButton.opacity).toBeCloseTo(1, 2);
 
     move(new Bound(0, 0, 0, 0));

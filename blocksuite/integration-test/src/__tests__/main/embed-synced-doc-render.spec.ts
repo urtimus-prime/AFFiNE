@@ -22,6 +22,12 @@ beforeEach(async () => {
   return cleanup;
 });
 
+const getEditorContainer = () => editor.parentElement ?? document.body;
+
+const queryAllInEditor = (selector: string) => {
+  return getEditorContainer().querySelectorAll(selector);
+};
+
 const getRootNoteId = () => {
   const rootId = doc.root?.id;
   if (!rootId) {
@@ -101,18 +107,14 @@ test('nested embed synced doc should be rendered as card when depth >=1', async 
 
   await waitForCondition(
     () =>
-      document.querySelectorAll('affine-embed-synced-doc-block').length === 2 &&
-      document.querySelectorAll('affine-embed-synced-doc-card').length === 1
+      queryAllInEditor('affine-embed-synced-doc-block').length === 2 &&
+      queryAllInEditor('affine-embed-synced-doc-card').length === 1
   );
 
-  expect(
-    document.querySelectorAll('affine-embed-synced-doc-block')
-  ).toHaveLength(2);
-  expect(document.querySelectorAll('affine-paragraph')).toHaveLength(2);
-  expect(
-    document.querySelectorAll('affine-embed-synced-doc-card')
-  ).toHaveLength(1);
-  expect(document.querySelectorAll('editor-host')).toHaveLength(2);
+  expect(queryAllInEditor('affine-embed-synced-doc-block')).toHaveLength(2);
+  expect(queryAllInEditor('affine-paragraph')).toHaveLength(2);
+  expect(queryAllInEditor('affine-embed-synced-doc-card')).toHaveLength(1);
+  expect(queryAllInEditor('editor-host')).toHaveLength(2);
 });
 
 test('synced doc should be readonly', async () => {
@@ -157,11 +159,15 @@ test('synced doc should be readonly', async () => {
   );
 
   await waitForCondition(
-    () => !!document.querySelector('affine-embed-synced-doc-block editor-host')
+    () =>
+      !!getEditorContainer().querySelector(
+        'affine-embed-synced-doc-block editor-host'
+      )
   );
-  const nestedEditorHost = document.querySelector<EditorHostElement>(
-    'affine-embed-synced-doc-block editor-host'
-  );
+  const nestedEditorHost =
+    getEditorContainer().querySelector<EditorHostElement>(
+      'affine-embed-synced-doc-block editor-host'
+    );
   expect(nestedEditorHost?.store?.readonly).toBe(true);
 
   const databaseFirstCell =
@@ -182,10 +188,10 @@ test('synced doc should be readonly', async () => {
 
   await waitForCondition(
     () =>
-      document.querySelectorAll('.affine-embed-synced-doc-container.selected')
-        .length === 1
+      queryAllInEditor('.affine-embed-synced-doc-container.selected').length ===
+      1
   );
   expect(
-    document.querySelectorAll('.affine-embed-synced-doc-container.selected')
+    queryAllInEditor('.affine-embed-synced-doc-container.selected')
   ).toHaveLength(1);
 });

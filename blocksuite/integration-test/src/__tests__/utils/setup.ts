@@ -148,7 +148,12 @@ export async function setupEditor(
 }
 
 export function cleanup() {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => {});
+  }
+
   window.editor?.remove();
+  document.body.replaceChildren();
 
   delete (window as any).collection;
 

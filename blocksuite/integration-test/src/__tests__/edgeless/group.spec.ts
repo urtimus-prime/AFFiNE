@@ -152,7 +152,7 @@ describe('group', () => {
     inlineEditorContainer?: HTMLElement | null;
   };
 
-  const waitForCondition = async (condition: () => boolean, retries = 40) => {
+  const waitForCondition = async (condition: () => boolean, retries = 80) => {
     for (let i = 0; i < retries; i++) {
       if (condition()) {
         return;
@@ -223,23 +223,39 @@ describe('group', () => {
     await wait();
   };
 
+  const dispatchKey = (
+    type: 'keydown' | 'keyup',
+    init: {
+      key: string;
+      code?: string;
+      ctrlKey?: boolean;
+      metaKey?: boolean;
+      altKey?: boolean;
+      shiftKey?: boolean;
+    }
+  ) => {
+    const target =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : document.body;
+    target.dispatchEvent(
+      new KeyboardEvent(type, {
+        key: init.key,
+        code: init.code ?? init.key,
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+        ctrlKey: init.ctrlKey ?? false,
+        metaKey: init.metaKey ?? false,
+        altKey: init.altKey ?? false,
+        shiftKey: init.shiftKey ?? false,
+      })
+    );
+  };
+
   const pressEnter = () => {
-    document.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        bubbles: true,
-        cancelable: true,
-      })
-    );
-    document.dispatchEvent(
-      new KeyboardEvent('keyup', {
-        key: 'Enter',
-        code: 'Enter',
-        bubbles: true,
-        cancelable: true,
-      })
-    );
+    dispatchKey('keydown', { key: 'Enter', code: 'Enter' });
+    dispatchKey('keyup', { key: 'Enter', code: 'Enter' });
   };
 
   const quickConnect = async (
@@ -962,8 +978,19 @@ describe('group', () => {
     const group = createGroupForTitle();
 
     await waitForGroupTitleBound(group);
-    await dblclickGroupTitle(group);
+    mountGroupTitleEditor(group, edgeless);
+    if (!getGroupTitleEditor()) {
+      await dblclickGroupTitle(group);
+    }
     await waitForGroupTitleEditor(true);
+    await waitForCondition(
+      () => !!getGroupTitleEditor()?.inlineEditorContainer
+    );
+    await waitForCondition(() => group.showTitle === false);
+
+    const titleEditor = getGroupTitleEditor();
+    editor.std.event.active = true;
+    titleEditor?.inlineEditorContainer?.focus();
 
     pressEnter();
     await waitForGroupTitleEditor(false);

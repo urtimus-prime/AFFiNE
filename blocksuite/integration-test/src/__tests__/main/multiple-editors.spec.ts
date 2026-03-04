@@ -80,19 +80,29 @@ function setCrossBlockSelection(
   editor.std.event.active = true;
 }
 
-async function waitForOpenToolbarCountAtMostOne(retries = 20) {
+const countInScopes = (selector: string, scopes: ParentNode[]) => {
+  return scopes.reduce(
+    (count, scope) => count + scope.querySelectorAll(selector).length,
+    0
+  );
+};
+
+async function waitForOpenToolbarCountAtMostOne(
+  scopes: ParentNode[],
+  retries = 20
+) {
   for (let i = 0; i < retries; i++) {
-    const count = document.querySelectorAll(
-      'affine-toolbar-widget editor-toolbar[data-open]'
-    ).length;
+    const count = countInScopes(
+      'affine-toolbar-widget editor-toolbar[data-open]',
+      scopes
+    );
     if (count <= 1) {
       return;
     }
     await wait(50);
   }
   expect(
-    document.querySelectorAll('affine-toolbar-widget editor-toolbar[data-open]')
-      .length
+    countInScopes('affine-toolbar-widget editor-toolbar[data-open]', scopes)
   ).toBeLessThanOrEqual(1);
 }
 
@@ -106,18 +116,22 @@ test('shows only one open format bar when multiple page editors exist', async ()
   anotherEditor.mode = 'page';
   anotherEditor.pageSpecs = editor.pageSpecs;
   anotherEditor.edgelessSpecs = editor.edgelessSpecs;
-  document.body.append(anotherEditor);
-  await anotherEditor.updateComplete;
-  await wait(100);
+  const editorScopes = [editor.parentElement ?? editor, anotherEditor];
 
-  setCrossBlockSelection(
-    { blockId: paragraphIds[0], index: 1 },
-    { blockId: paragraphIds[2], index: 2 }
-  );
-  const textSelection = editor.host?.selection.find(TextSelection);
-  expect(textSelection?.isCollapsed()).toBe(false);
-  expect(document.querySelectorAll('affine-page-root').length).toBe(2);
-  await waitForOpenToolbarCountAtMostOne();
+  try {
+    document.body.append(anotherEditor);
+    await anotherEditor.updateComplete;
+    await wait(100);
 
-  anotherEditor.remove();
+    setCrossBlockSelection(
+      { blockId: paragraphIds[0], index: 1 },
+      { blockId: paragraphIds[2], index: 2 }
+    );
+    const textSelection = editor.host?.selection.find(TextSelection);
+    expect(textSelection?.isCollapsed()).toBe(false);
+    expect(countInScopes('affine-page-root', editorScopes)).toBe(2);
+    await waitForOpenToolbarCountAtMostOne(editorScopes);
+  } finally {
+    anotherEditor.remove();
+  }
 });

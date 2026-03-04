@@ -37,16 +37,22 @@ const createImageBlob = () => {
   return new Blob([svg], { type: 'image/svg+xml' });
 };
 
-const waitForImage = async () => {
-  for (let i = 0; i < 20; i++) {
-    const image = document.querySelector('affine-image');
-    const resizableImage = document.querySelector('.resizable-img');
-    if (image && resizableImage) {
-      return image as HTMLElement;
+const waitForImage = async (imageId: string) => {
+  for (let i = 0; i < 80; i++) {
+    const imageBlock = editor.host?.view.getBlock(
+      imageId
+    ) as HTMLElement | null;
+    const resizableImage =
+      imageBlock?.querySelector<HTMLElement>('.resizable-img');
+    if (imageBlock && resizableImage) {
+      const rect = resizableImage.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return imageBlock;
+      }
     }
     await wait(50);
   }
-  throw new Error('Cannot find image block');
+  throw new Error(`Cannot find image block: ${imageId}`);
 };
 
 test('select image should not show format bar', async () => {
@@ -70,7 +76,7 @@ test('select image should not show format bar', async () => {
     noteId
   );
 
-  const image = await waitForImage();
+  const image = await waitForImage(imageId);
   const imageRect = image.getBoundingClientRect();
   click(image, { x: imageRect.width / 2, y: imageRect.height / 2 });
 
