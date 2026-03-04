@@ -5,6 +5,7 @@
  * In these cases, these functions should not be called.
  */
 export * from './affine-snapshot.js';
+export * from './comfyui.js';
 export * from './database.js';
 export * from './embed.js';
 export * from './empty.js';
@@ -14,6 +15,7 @@ export * from './linked.js';
 export * from './multiple-editor.js';
 export * from './pending-structs.js';
 export * from './preset.js';
+export * from './skill-tree.js';
 export * from './synced.js';
 export type { InitFn } from './utils.js';
 export * from './version-mismatch.js';

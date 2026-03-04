@@ -80,6 +80,8 @@
     { "path": "./blocksuite/affine/fragments/frame-panel" },
     { "path": "./blocksuite/affine/fragments/outline" },
     { "path": "./blocksuite/affine/gfx/brush" },
+    { "path": "./blocksuite/affine/gfx/comfyui" },
+    { "path": "./blocksuite/affine/gfx/skill-tree" },
     { "path": "./blocksuite/affine/gfx/connector" },
     { "path": "./blocksuite/affine/gfx/group" },
     { "path": "./blocksuite/affine/gfx/link" },

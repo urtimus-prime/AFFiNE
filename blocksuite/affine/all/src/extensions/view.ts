@@ -24,6 +24,7 @@ import { DocTitleViewExtension } from '@blocksuite/affine-fragment-doc-title/vie
 import { FramePanelViewExtension } from '@blocksuite/affine-fragment-frame-panel/view';
 import { OutlineViewExtension } from '@blocksuite/affine-fragment-outline/view';
 import { BrushViewExtension } from '@blocksuite/affine-gfx-brush/view';
+import { ComfyUIViewExtension } from '@blocksuite/affine-gfx-comfyui/view';
 import { ConnectorViewExtension } from '@blocksuite/affine-gfx-connector/view';
 import { GroupViewExtension } from '@blocksuite/affine-gfx-group/view';
 import { LinkViewExtension as GfxLinkViewExtension } from '@blocksuite/affine-gfx-link/view';
@@ -31,6 +32,7 @@ import { MindmapViewExtension } from '@blocksuite/affine-gfx-mindmap/view';
 import { NoteViewExtension as GfxNoteViewExtension } from '@blocksuite/affine-gfx-note/view';
 import { PointerViewExtension } from '@blocksuite/affine-gfx-pointer/view';
 import { ShapeViewExtension } from '@blocksuite/affine-gfx-shape/view';
+import { SkillTreeViewExtension } from '@blocksuite/affine-gfx-skill-tree/view';
 import { TemplateViewExtension } from '@blocksuite/affine-gfx-template/view';
 import { TextViewExtension } from '@blocksuite/affine-gfx-text/view';
 import { InlineCommentViewExtension } from '@blocksuite/affine-inline-comment/view';
@@ -72,6 +74,8 @@ export function getInternalViewExtensions() {
     TextViewExtension,
     TemplateViewExtension,
     GfxLinkViewExtension,
+    ComfyUIViewExtension,
+    SkillTreeViewExtension,
 
     // Block
     AttachmentViewExtension,

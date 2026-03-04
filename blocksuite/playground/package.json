@@ -11,6 +11,8 @@
   "dependencies": {
     "@blocksuite/affine": "workspace:*",
     "@blocksuite/affine-components": "workspace:*",
+    "@blocksuite/affine-gfx-comfyui": "workspace:*",
+    "@blocksuite/affine-gfx-skill-tree": "workspace:*",
     "@blocksuite/affine-model": "workspace:*",
     "@blocksuite/affine-shared": "workspace:*",
     "@blocksuite/data-view": "workspace:*",

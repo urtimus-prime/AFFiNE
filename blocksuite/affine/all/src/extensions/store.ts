@@ -20,10 +20,12 @@ import { SurfaceRefStoreExtension } from '@blocksuite/affine-block-surface-ref/s
 import { TableStoreExtension } from '@blocksuite/affine-block-table/store';
 import { FoundationStoreExtension } from '@blocksuite/affine-foundation/store';
 import { BrushStoreExtension } from '@blocksuite/affine-gfx-brush/store';
+import { ComfyUIStoreExtension } from '@blocksuite/affine-gfx-comfyui/store';
 import { ConnectorStoreExtension } from '@blocksuite/affine-gfx-connector/store';
 import { GroupStoreExtension } from '@blocksuite/affine-gfx-group/store';
 import { MindmapStoreExtension } from '@blocksuite/affine-gfx-mindmap/store';
 import { ShapeStoreExtension } from '@blocksuite/affine-gfx-shape/store';
+import { SkillTreeStoreExtension } from '@blocksuite/affine-gfx-skill-tree/store';
 import { TextStoreExtension } from '@blocksuite/affine-gfx-text/store';
 import { FootnoteStoreExtension } from '@blocksuite/affine-inline-footnote/store';
 import { LatexStoreExtension as InlineLatexStoreExtension } from '@blocksuite/affine-inline-latex/store';
@@ -68,5 +70,7 @@ export function getInternalStoreExtensions() {
     ConnectorStoreExtension,
     GroupStoreExtension,
     TextStoreExtension,
+    ComfyUIStoreExtension,
+    SkillTreeStoreExtension,
   ];
 }

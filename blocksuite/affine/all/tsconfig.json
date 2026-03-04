@@ -35,6 +35,8 @@
     { "path": "../fragments/frame-panel" },
     { "path": "../fragments/outline" },
     { "path": "../gfx/brush" },
+    { "path": "../gfx/comfyui" },
+    { "path": "../gfx/skill-tree" },
     { "path": "../gfx/connector" },
     { "path": "../gfx/group" },
     { "path": "../gfx/link" },
